@@ -1,0 +1,320 @@
+// SPDX-License-Identifier: GPL-2.0-only
+/*
+ * Minimal Device Tree for Xiaomi Redmi 10 2022 (selene)
+ * SoC: MediaTek MT6769H (Helio G88)
+ *
+ * Ported to mainline 6.18 from:
+ *   - merlin (mt6769z) 6.18 DT as base
+ *   - selene vendor 4.14 DT for specific values
+ */
+
+/dts-v1/;
+
+#include <dt-bindings/gpio/gpio.h>
+#include "mt6768.dtsi"
+#include "mt6358.dtsi"
+
+/ {
+	model = "Xiaomi Redmi 10 2022";
+	compatible = "xiaomi,selene", "mediatek,mt6768","mediatek,mt6769","mediatek,mt6769h";
+
+	aliases {
+		serial0 = &uart0;
+	};
+
+	chosen {
+		stdout-path = &framebuffer0;
+		bootargs = "console=tty0 earlycon=mtk8250,0x11002000 \
+clk_ignore_unused regulator_ignore_unused \
+log_buf_len=32M loglevel=7 \
+root=PARTUUID=0dccf4ed-53a5-4b67-91ad-c680ba4e32a4 \
+rootfstype=f2fs rootwait rw \
+mitigations=off bootopt=64S3,32N2,64N2 \
+androidboot.hardware=mt6768";
+	};
+
+	/*
+	 * simple-framebuffer :)))))))))))))) res: 1080x2400
+	 */
+	framebuffer0: framebuffer@7e605000 {
+		compatible = "simple-framebuffer";
+		reg = <0x0 0x7e605000 0x0 0x017e8000>;
+		format = "a8r8g8b8";
+		width  = <1080>;
+		stride = <4320>;
+		height = <2400>;
+		status = "okay";
+	};
+
+	/*
+	 * 4 GB LPDDR4X.
+	 */
+	memory@40000000 {
+		device_type = "memory";
+		reg = <0x0 0x40000000 0x0 0xc0000000>;
+	};
+};
+
+/* ------------------------------------------------------------------ */
+/*  Serial                                                            */
+/* ------------------------------------------------------------------ */
+
+&uart0 {
+	status = "okay";
+};
+
+/* ------------------------------------------------------------------ */
+/*  Display - DSI + panel                                             */
+/* ------------------------------------------------------------------ */
+
+&mipi_tx0 {
+	status = "okay";
+};
+
+/*
+ * Panel: Novatek NT36672C, FHD+ DSI video mode, 60 Hz, no DSC
+ * Vendor LCM driver: nt36672c_fhdp_dsi_vdo_60hz_shenchao_wo_dsc
+ *
+ * vddio  - MT6358 VIO18  (1.8 V digital)
+ * reset  - GPIO 45 (PINMUX_GPIO45__FUNC_GPIO45), active-high
+ * TE     - GPIO 44 (PINMUX_GPIO44__FUNC_DSI_TE)
+ *
+ */
+&dsi0 {
+	status = "okay";
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	panel: panel@0 {
+		compatible = "novatek,nt36672c";
+		reg = <0>;
+
+		vddio-supply = <&mt6358_vio18_reg>;
+
+		/*
+		 * Backlight LM3697 on i2c0; enable line = GPIO160.
+		 */
+		backlight = <&backlight>;
+
+		reset-gpios = <&pio 45 GPIO_ACTIVE_HIGH>;
+
+		port {
+			selene_panel_in: endpoint {
+				remote-endpoint = <&dsi_out>;
+			};
+		};
+	};
+};
+
+&dsi_out {
+	remote-endpoint = <&selene_panel_in>;
+};
+
+/* ------------------------------------------------------------------ */
+/*  Backlight - LM3697 (primary) on I2C0                              */
+/* ------------------------------------------------------------------ */
+
+&i2c0 {
+	status = "okay";
+	clock-frequency = <400000>;
+	#address-cells = <1>;
+	#size-cells = <0>;
+
+	backlight: backlight@36 {
+		compatible = "ti,lm3697";
+		reg = <0x36>;
+		enable-gpios = <&pio 160 GPIO_ACTIVE_HIGH>;
+
+		backlight {
+			compatible = "ti,lm3697-backlight";
+
+			lcd {
+				led-sources = <0 1 2>;
+				ramp-up-msec = <200>;
+				ramp-down-msec = <200>;
+				pwm-period = <0>;
+				default-brightness-level = <255>;
+			};
+		};
+
+		fault-monitor {
+			compatible = "ti,lm3697-fault-monitor";
+		};
+	};
+
+	/*
+	 * LCD bias IC (DSV ±5.5 V for panel).
+	 */
+	lcd_bias@3e {
+		compatible = "mediatek,lcd_bias";
+		reg = <0x3e>;
+		status = "okay";
+	};
+};
+
+/* ------------------------------------------------------------------ */
+/*  CPU / GPU power - MT6358 PMIC, identical to merlin                */
+/* ------------------------------------------------------------------ */
+
+&cci {
+	proc-supply = <&mt6358_vproc12_reg>;
+};
+
+&cpu0 { proc-supply = <&mt6358_vproc12_reg>; };
+&cpu1 { proc-supply = <&mt6358_vproc12_reg>; };
+&cpu2 { proc-supply = <&mt6358_vproc12_reg>; };
+&cpu3 { proc-supply = <&mt6358_vproc12_reg>; };
+&cpu4 { proc-supply = <&mt6358_vproc12_reg>; };
+&cpu5 { proc-supply = <&mt6358_vproc12_reg>; };
+&cpu6 { proc-supply = <&mt6358_vproc11_reg>; };
+&cpu7 { proc-supply = <&mt6358_vproc11_reg>; };
+
+&pmic {
+	interrupts-extended = <&pio 144 IRQ_TYPE_LEVEL_HIGH>;
+};
+
+/* Keep IO / memory rails alive */
+&mt6358_vio28_reg  { regulator-always-on; };
+&mt6358_vaux18_reg { regulator-always-on; };
+&mt6358_vdram2_reg { regulator-always-on; };
+
+&gpu {
+	status = "okay";
+	mali-supply = <&mt6358_vgpu_reg>;
+};
+
+&mt6358_vgpu_reg {
+	regulator-max-microvolt = <950000>;
+	regulator-always-on;
+	regulator-boot-on;
+	regulator-coupled-with = <&mt6358_vsram_gpu_reg>;
+	regulator-coupled-max-spread = <100000>;
+};
+
+&mt6358_vsram_gpu_reg {
+	regulator-min-microvolt = <850000>;
+	regulator-max-microvolt = <1050000>;
+	regulator-always-on;
+	regulator-boot-on;
+	regulator-coupled-with = <&mt6358_vgpu_reg>;
+	regulator-coupled-max-spread = <100000>;
+};
+
+/* ------------------------------------------------------------------ */
+/*  eMMC (mmc0) - same pin numbers as merlin on MT6768                */
+/* ------------------------------------------------------------------ */
+
+&mmc0 {
+	status = "okay";
+	pinctrl-names = "default", "state_uhs";
+	pinctrl-0 = <&mmc0_default_pins>;
+	pinctrl-1 = <&mmc0_default_pins>;
+	bus-width = <8>;
+	max-frequency = <200000000>;
+	cap-mmc-highspeed;
+	mmc-ddr-1_8v;
+	mmc-hs200-1_8v;
+	mmc-hs400-1_8v;
+	cap-mmc-hw-reset;
+	no-sdio;
+	no-sd;
+	non-removable;
+	hs400-ds-delay = <0x12814>;
+	vmmc-supply  = <&mt6358_vemc_reg>;
+	vqmmc-supply = <&mt6358_vio18_reg>;
+};
+
+/* ------------------------------------------------------------------ */
+/*  Pin control                                                       */
+/* ------------------------------------------------------------------ */
+
+&pio {
+	/* eMMC */
+	mmc0_default_pins: mmc0-default-pins {
+		pins-clk {
+			pinmux = <PINMUX_GPIO124__FUNC_MSDC0_CLK>;
+			drive-strength = <MTK_DRIVE_4mA>;
+			bias-pull-down = <MTK_PUPD_SET_R1R0_10>;
+		};
+		pins-cmd-dat {
+			pinmux = <PINMUX_GPIO123__FUNC_MSDC0_DAT0>,
+				 <PINMUX_GPIO128__FUNC_MSDC0_DAT1>,
+				 <PINMUX_GPIO125__FUNC_MSDC0_DAT2>,
+				 <PINMUX_GPIO132__FUNC_MSDC0_DAT3>,
+				 <PINMUX_GPIO126__FUNC_MSDC0_DAT4>,
+				 <PINMUX_GPIO129__FUNC_MSDC0_DAT5>,
+				 <PINMUX_GPIO127__FUNC_MSDC0_DAT6>,
+				 <PINMUX_GPIO130__FUNC_MSDC0_DAT7>,
+				 <PINMUX_GPIO122__FUNC_MSDC0_CMD>;
+			input-enable;
+			drive-strength = <MTK_DRIVE_4mA>;
+			bias-pull-up = <MTK_PUPD_SET_R1R0_01>;
+		};
+		pins-ds {
+			pinmux = <PINMUX_GPIO131__FUNC_MSDC0_DSL>;
+			drive-strength = <MTK_DRIVE_4mA>;
+		};
+		pins-rst {
+			pinmux = <PINMUX_GPIO133__FUNC_MSDC0_RSTB>;
+			drive-strength = <MTK_DRIVE_6mA>;
+			bias-pull-up = <MTK_PUPD_SET_R1R0_01>;
+		};
+	};
+
+	/*
+	 * Display pinmux states - from selene vendor DT
+	 */
+	mtkfb_pins_lcm_rst_out1_gpio: lcm-rst-out1-gpio {
+		pins_cmd_dat {
+			pinmux = <PINMUX_GPIO45__FUNC_GPIO45>;
+			slew-rate = <1>;
+			output-high;
+		};
+	};
+
+	mtkfb_pins_lcm_rst_out0_gpio: lcm-rst-out0-gpio {
+		pins_cmd_dat {
+			pinmux = <PINMUX_GPIO45__FUNC_GPIO45>;
+			slew-rate = <1>;
+			output-low;
+		};
+	};
+
+	mtkfb_pins_lcm_dsi_te: lcm-dsi-te {
+		pins_cmd_dat {
+			pinmux = <PINMUX_GPIO44__FUNC_DSI_TE>;
+		};
+	};
+
+	/* MT6382 companion chip reset - keep defined even if unused */
+	mtkfb_pins_6382_rst_out1_gpio: mt6382-rst-out1-gpio {
+		pins_cmd_dat {
+			pinmux = <PINMUX_GPIO151__FUNC_GPIO151>;
+			slew-rate = <1>;
+			output-high;
+		};
+	};
+
+	mtkfb_pins_6382_rst_out0_gpio: mt6382-rst-out0-gpio {
+		pins_cmd_dat {
+			pinmux = <PINMUX_GPIO151__FUNC_GPIO151>;
+			slew-rate = <1>;
+			output-low;
+		};
+	};
+};
+
+&mtkfb {
+	pinctrl-names =
+		"lcm_rst_out1_gpio",
+		"lcm_rst_out0_gpio",
+		"mode_te_te",
+		"6382_rst_out1_gpio",
+		"6382_rst_out0_gpio";
+	pinctrl-0 = <&mtkfb_pins_lcm_rst_out1_gpio>;
+	pinctrl-1 = <&mtkfb_pins_lcm_rst_out0_gpio>;
+	pinctrl-2 = <&mtkfb_pins_lcm_dsi_te>;
+	pinctrl-3 = <&mtkfb_pins_6382_rst_out1_gpio>;
+	pinctrl-4 = <&mtkfb_pins_6382_rst_out0_gpio>;
+	status = "okay";
+};
