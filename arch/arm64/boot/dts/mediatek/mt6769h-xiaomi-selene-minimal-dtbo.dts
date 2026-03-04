@@ -1,0 +1,182 @@
+/dts-v1/;
+/plugin/;
+
+/ {
+	/* fragment@0 - ODM (LEDs + vibrator) */
+	fragment@0 {
+		target = <0xffffffff>;
+
+		__overlay__ {
+			led@0 {
+				compatible = "mediatek,red";
+				led_mode = <0>;
+				data = <1>;
+				pwm_config = <0 0 0 0 0>;
+			};
+			led@1 {
+				compatible = "mediatek,green";
+				led_mode = <0>;
+				data = <1>;
+				pwm_config = <0 0 0 0 0>;
+			};
+			led@2 {
+				compatible = "mediatek,blue";
+				led_mode = <0>;
+				data = <1>;
+				pwm_config = <0 0 0 0 0>;
+			};
+			led@3 {
+				compatible = "mediatek,jogball-backlight";
+				led_mode = <0>;
+				data = <1>;
+				pwm_config = <0 0 0 0 0>;
+			};
+			led@4 {
+				compatible = "mediatek,keyboard-backlight";
+				led_mode = <0>;
+				data = <1>;
+				pwm_config = <0 0 0 0 0>;
+			};
+			led@5 {
+				compatible = "mediatek,button-backlight";
+				led_mode = <0>;
+				data = <1>;
+				pwm_config = <0 0 0 0 0>;
+			};
+			led@6 {
+				compatible = "mediatek,lcd-backlight";
+				led_mode = <4>;
+				data = <1>;
+				pwm_config = <0 3 0 0 0>;
+			};
+			vibrator@0 {
+				compatible = "mediatek,vibrator";
+				vib_timer = <25>;
+				vib_limit = <9>;
+				vib_vol   = <11>;
+			};
+		};
+	};
+
+	/* fragment@1 LCM reset + TE pinmux states */
+	fragment@1 {
+		target = <0xffffffff>;
+
+		__overlay__ {
+			mtkfb_pins_lcm_rst_out1_gpio: lcm_rst_out1_gpio {
+				pins_cmd_dat {
+					pinmux = <0x2d00>; /* GPIO45, output */
+					slew-rate = <1>;
+					output-high;
+				};
+			};
+
+			mtkfb_pins_lcm_rst_out0_gpio: lcm_rst_out0_gpio {
+				pins_cmd_dat {
+					pinmux = <0x2d00>; /* GPIO45, output */
+					slew-rate = <1>;
+					output-low;
+				};
+			};
+
+			mtkfb_pins_lcm_dsi_te: lcm_dsi_te {
+				pins_cmd_dat {
+					pinmux = <0x2c01>; /* GPIO44, DSI_TE func */
+				};
+			};
+
+			/* MT6382 companion reset — GPIO151 */
+			mtkfb_pins_6382_rst_out1_gpio: 6382_rst_out1_gpio {
+				pins_cmd_dat {
+					pinmux = <0x9780>; /* GPIO151, output */
+					slew-rate = <1>;
+					output-high;
+				};
+			};
+
+			mtkfb_pins_6382_rst_out0_gpio: 6382_rst_out0_gpio {
+				pins_cmd_dat {
+					pinmux = <0x9780>; /* GPIO151, output */
+					slew-rate = <1>;
+					output-low;
+				};
+			};
+		};
+	};
+
+	/* fragment@2 - mtkfb pinctrl binding */
+	fragment@2 {
+		target = <0xffffffff>;
+
+		__overlay__ {
+			pinctrl-names =
+				"lcm_rst_out1_gpio",
+				"lcm_rst_out0_gpio",
+				"mode_te_te",
+				"6382_rst_out1_gpio",
+				"6382_rst_out0_gpio";
+			pinctrl-0 = <&mtkfb_pins_lcm_rst_out1_gpio>;
+			pinctrl-1 = <&mtkfb_pins_lcm_rst_out0_gpio>;
+			pinctrl-2 = <&mtkfb_pins_lcm_dsi_te>;
+			pinctrl-3 = <&mtkfb_pins_6382_rst_out1_gpio>;
+			pinctrl-4 = <&mtkfb_pins_6382_rst_out0_gpio>;
+			status = "okay";
+		};
+	};
+
+	/* fragment@3 - keypad*/
+	fragment@3 {
+		target = <0xffffffff>;
+
+		__overlay__ {
+			mediatek,kpd-key-debounce    = <1024>;
+			mediatek,kpd-sw-pwrkey       = <116>;
+			mediatek,kpd-hw-pwrkey       = <8>;
+			mediatek,kpd-sw-rstkey       = <115>;
+			mediatek,kpd-hw-rstkey       = <17>;
+			mediatek,kpd-use-extend-type = <0>;
+			mediatek,kpd-hw-map-num      = <72>;
+			mediatek,kpd-hw-init-map =
+				<114 0 0 0 0 0 0 0 0
+				   0 0 0 0 0 0 0 0 0
+				   0 0 0 0 0 0 0 0 0
+				   0 0 0 0 0 0 0 0 0
+				   0 0 0 0 0 0 0 0 0
+				   0 0 0 0 0 0 0 0 0
+				   0 0 0 0 0 0 0 0 0
+				   0 0 0 0 0 0 0 0 0>;
+			mediatek,kpd-pwrkey-eint-gpio = <0>;
+			mediatek,kpd-pwkey-gpio-din   = <0>;
+			mediatek,kpd-hw-dl-key0       = <17>;
+			mediatek,kpd-hw-dl-key1       = <0>;
+			mediatek,kpd-hw-dl-key2       = <8>;
+			mediatek,kpd-hw-recovery-key  = <17>;
+			mediatek,kpd-hw-factory-key   = <0>;
+			status = "okay";
+		};
+	};
+
+	__symbols__ {
+		mtkfb_pins_lcm_rst_out1_gpio = "/fragment@1/__overlay__/lcm_rst_out1_gpio";
+		mtkfb_pins_lcm_rst_out0_gpio = "/fragment@1/__overlay__/lcm_rst_out0_gpio";
+	};
+
+	__fixups__ {
+		odm    = "/fragment@0:target:0";
+		pio    = "/fragment@1:target:0";
+		mtkfb  = "/fragment@2:target:0";
+		keypad = "/fragment@3:target:0";
+	};
+
+	__local_fixups__ {
+		fragment@2 {
+			__overlay__ {
+				pinctrl-0 = <0>;
+				pinctrl-1 = <0>;
+				pinctrl-2 = <0>;
+				pinctrl-3 = <0>;
+				pinctrl-4 = <0>;
+			};
+		};
+	};
+};
